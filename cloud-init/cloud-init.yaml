@@ -1,0 +1,151 @@
+#cloud-config
+
+write_files:
+  - path: /usr/local/bin/openclaw-bootstrap.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      export DEBIAN_FRONTEND=noninteractive
+
+      if [[ ! -f /swapfile ]]; then
+        fallocate -l 4G /swapfile
+        chmod 0600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        echo '/swapfile none swap sw 0 0' >>/etc/fstab
+      fi
+
+      apt-get update
+      apt-get install -y ca-certificates curl gnupg openssl
+
+      install -d -m 0755 /etc/apt/keyrings
+      if [[ ! -f /etc/apt/keyrings/nodesource.gpg ]]; then
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+      fi
+
+      cat >/etc/apt/sources.list.d/nodesource.list <<'EOF'
+      deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main
+      EOF
+
+      apt-get update
+      apt-get install -y nodejs
+
+      mkdir -p /var/tmp/npm-cache /var/tmp/openclaw-compile-cache
+      npm_config_cache=/var/tmp/npm-cache \
+      SHARP_IGNORE_GLOBAL_LIBVIPS=1 \
+      npm install -g --unsafe-perm openclaw@latest
+
+      hostnamectl set-hostname openclaw
+
+      install -d -o ubuntu -g ubuntu -m 0700 /home/ubuntu/.openclaw
+      install -d -o ubuntu -g ubuntu -m 0700 /home/ubuntu/.openclaw/workspace
+      install -d -o ubuntu -g ubuntu -m 0755 /var/tmp/openclaw-compile-cache
+
+      if [[ ! -s /home/ubuntu/.openclaw/GATEWAY_TOKEN ]]; then
+        openssl rand -hex 24 >/home/ubuntu/.openclaw/GATEWAY_TOKEN
+        chown ubuntu:ubuntu /home/ubuntu/.openclaw/GATEWAY_TOKEN
+        chmod 0600 /home/ubuntu/.openclaw/GATEWAY_TOKEN
+      fi
+
+      TOKEN="$(cat /home/ubuntu/.openclaw/GATEWAY_TOKEN)"
+
+      sudo -u ubuntu env \
+        HOME=/home/ubuntu \
+        OPENCLAW_HOME=/home/ubuntu/.openclaw \
+        OPENCLAW_STATE_DIR=/home/ubuntu/.openclaw \
+        OPENCLAW_CONFIG_PATH=/home/ubuntu/.openclaw/openclaw.json \
+        /usr/bin/openclaw config set gateway.mode local
+
+      sudo -u ubuntu env \
+        HOME=/home/ubuntu \
+        OPENCLAW_HOME=/home/ubuntu/.openclaw \
+        OPENCLAW_STATE_DIR=/home/ubuntu/.openclaw \
+        OPENCLAW_CONFIG_PATH=/home/ubuntu/.openclaw/openclaw.json \
+        /usr/bin/openclaw config set gateway.bind loopback
+
+      sudo -u ubuntu env \
+        HOME=/home/ubuntu \
+        OPENCLAW_HOME=/home/ubuntu/.openclaw \
+        OPENCLAW_STATE_DIR=/home/ubuntu/.openclaw \
+        OPENCLAW_CONFIG_PATH=/home/ubuntu/.openclaw/openclaw.json \
+        /usr/bin/openclaw config set gateway.auth.mode token
+
+      sudo -u ubuntu env \
+        HOME=/home/ubuntu \
+        OPENCLAW_HOME=/home/ubuntu/.openclaw \
+        OPENCLAW_STATE_DIR=/home/ubuntu/.openclaw \
+        OPENCLAW_CONFIG_PATH=/home/ubuntu/.openclaw/openclaw.json \
+        /usr/bin/openclaw config set gateway.auth.token "$TOKEN"
+
+      cat >/etc/systemd/system/openclaw.service <<'EOF'
+      [Unit]
+      Description=OpenClaw Gateway
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      User=ubuntu
+      Group=ubuntu
+      WorkingDirectory=/home/ubuntu
+      Environment=HOME=/home/ubuntu
+      Environment=OPENCLAW_HOME=/home/ubuntu/.openclaw
+      Environment=OPENCLAW_STATE_DIR=/home/ubuntu/.openclaw
+      Environment=OPENCLAW_CONFIG_PATH=/home/ubuntu/.openclaw/openclaw.json
+      Environment=OPENCLAW_NO_RESPAWN=1
+      Environment=NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache
+      ExecStartPre=/usr/bin/mkdir -p /home/ubuntu/.openclaw /home/ubuntu/.openclaw/workspace /var/tmp/openclaw-compile-cache
+      ExecStartPre=/usr/bin/chown -R ubuntu:ubuntu /home/ubuntu/.openclaw /var/tmp/openclaw-compile-cache
+      ExecStart=/usr/bin/openclaw gateway --port 18789
+      Restart=always
+      RestartSec=5
+      TimeoutStartSec=90
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      systemctl daemon-reload
+      systemctl enable --now openclaw.service
+
+      sudo -u ubuntu env \
+        HOME=/home/ubuntu \
+        OPENCLAW_HOME=/home/ubuntu/.openclaw \
+        OPENCLAW_STATE_DIR=/home/ubuntu/.openclaw \
+        OPENCLAW_CONFIG_PATH=/home/ubuntu/.openclaw/openclaw.json \
+        /usr/bin/openclaw --version >/var/log/openclaw-version.log 2>&1
+
+      for attempt in $(seq 1 18); do
+        if sudo -u ubuntu env \
+          HOME=/home/ubuntu \
+          OPENCLAW_HOME=/home/ubuntu/.openclaw \
+          OPENCLAW_STATE_DIR=/home/ubuntu/.openclaw \
+          OPENCLAW_CONFIG_PATH=/home/ubuntu/.openclaw/openclaw.json \
+          /usr/bin/openclaw gateway health --url ws://127.0.0.1:18789 --token "$TOKEN" >/var/log/openclaw-health.log 2>&1; then
+          exit 0
+        fi
+        sleep 5
+      done
+
+      journalctl -u openclaw.service --no-pager -n 200 >&2 || true
+      exit 1
+
+  - path: /home/ubuntu/OPENCLAW_ACCESS.txt
+    owner: ubuntu:ubuntu
+    permissions: "0600"
+    content: |
+      SSH tunnel:
+      ssh -N -L 18789:127.0.0.1:18789 ubuntu@<PUBLIC_IP>
+
+      Gateway token:
+      cat ~/.openclaw/GATEWAY_TOKEN
+
+      Control UI:
+      http://127.0.0.1:18789/
+
+runcmd:
+  - /usr/local/bin/openclaw-bootstrap.sh
+
