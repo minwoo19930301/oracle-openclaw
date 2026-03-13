@@ -85,7 +85,9 @@ Allow dynamic-group <name> to use instance-agent-command-execution-family in ten
 - `TELEGRAM_BOT_TOKEN` 은 맞지만 AI provider key가 비어 있음
 - pairing 승인이 안 됨
 - `OPENCLAW_MODEL` 이 잘못된 provider/model 값을 가리킴
+- 선택한 Gemini 모델이 free tier quota 초과(429)
 - Node TLS 인증서 체인이 깨져 Telegram/Gemini HTTPS 호출이 실패함
+- 게이트웨이 토큰 인증인데 CLI 호출에 `--token` 이 빠짐
 
 체크:
 
@@ -93,6 +95,7 @@ Allow dynamic-group <name> to use instance-agent-command-execution-family in ten
 curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe"
 openclaw pairing list telegram
 openclaw gateway health --url ws://127.0.0.1:18789 --token "$OPENCLAW_GATEWAY_TOKEN"
+openclaw gateway call status --token "$OPENCLAW_GATEWAY_TOKEN" --json
 ```
 
 추가 체크(로그):
@@ -139,6 +142,58 @@ openclaw cron runs --id <JOB_ID> --url ws://127.0.0.1:18789 --token "$OPENCLAW_G
 ```
 
 `summary: "DEFAULT_OK"` 와 `provider: "google"` 이 나오면 정상.
+
+## Gemini API rate limit(429 RESOURCE_EXHAUSTED)
+
+증상:
+
+- 응답에 `API rate limit reached` 또는 `RESOURCE_EXHAUSTED`
+- 특정 모델에서만 반복적으로 429
+
+대응:
+
+1. 모델을 `gemini-2.5-flash-lite`로 변경
+2. `agents.defaults.model.fallbacks`에 lite 계열 fallback 추가
+
+```bash
+# env
+OPENCLAW_MODEL=gemini-2.5-flash-lite
+```
+
+```json
+"model": {
+  "primary": "google/${OPENCLAW_MODEL}",
+  "fallbacks": [
+    "google/gemini-flash-lite-latest",
+    "google/gemini-3.1-flash-lite-preview",
+    "google/gemini-2.5-flash"
+  ]
+}
+```
+
+검증:
+
+```bash
+openclaw gateway call status --token "$OPENCLAW_GATEWAY_TOKEN" --json \
+  | jq -r '.sessions.defaults.model'
+```
+
+## `gateway timeout after 1500ms` / handshake timeout
+
+증상:
+
+- `openclaw` CLI에서 gateway timeout 또는 connect challenge timeout
+
+원인:
+
+- gateway는 토큰 인증인데 CLI 호출에 `--token` 미포함
+
+대응:
+
+```bash
+openclaw gateway probe --token "$OPENCLAW_GATEWAY_TOKEN" --json
+openclaw gateway call status --token "$OPENCLAW_GATEWAY_TOKEN" --json
+```
 
 ## Browser tool says unavailable / timed out
 

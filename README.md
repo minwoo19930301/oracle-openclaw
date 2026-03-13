@@ -49,7 +49,7 @@ Gemini API (google provider)
 
 기본 모델 권장:
 
-- `gemini-2.5-flash`
+- `gemini-2.5-flash-lite`
 
 ## 1. Gemini API Key 만들기
 
@@ -66,7 +66,7 @@ curl -sS "https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_A
 
 ```bash
 curl -sS \
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}" \
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"contents":[{"parts":[{"text":"한 줄 자기소개"}]}]}'
 ```
@@ -96,7 +96,7 @@ DM 창 바로 열기:
 ```bash
 TELEGRAM_BOT_TOKEN=1234567890:replace-with-botfather-token
 GEMINI_API_KEY=AIzaSyReplaceMe
-OPENCLAW_MODEL=gemini-2.5-flash
+OPENCLAW_MODEL=gemini-2.5-flash-lite
 OPENCLAW_GATEWAY_TOKEN=
 OPENCLAW_PORT=18789
 OPENCLAW_INSECURE_TLS=0
@@ -115,7 +115,7 @@ OPENAI_API_KEY=
 
 포인트:
 
-- 모델: `google/${OPENCLAW_MODEL}`
+- 모델: `google/${OPENCLAW_MODEL}` + `fallbacks`
 - cron 활성화
 - browser(CDP) 활성화 + 타임아웃 확장
 - agent/telegram timeout 확장 (`agents.defaults.timeoutSeconds`, `channels.telegram.timeoutSeconds`)
@@ -160,6 +160,7 @@ chmod +x /tmp/bootstrap_existing_oracle_vm.sh
 openclaw config validate
 openclaw cron list --url ws://127.0.0.1:18789 --token "$OPENCLAW_GATEWAY_TOKEN"
 openclaw browser status --url ws://127.0.0.1:18789 --token "$OPENCLAW_GATEWAY_TOKEN"
+openclaw gateway call status --token "$OPENCLAW_GATEWAY_TOKEN" --json
 ```
 
 ## 7. Telegram 연결/정체성 확인
@@ -173,6 +174,13 @@ Telegram DM에서:
 
 - OpenClaw 기반이라고 답함
 - provider/model이 Gemini(`google/gemini-*`)로 표시됨
+
+게이트웨이 기준 기본 모델 확인:
+
+```bash
+openclaw gateway call status --token "$OPENCLAW_GATEWAY_TOKEN" --json \
+  | jq -r '.sessions.defaults.model'
+```
 
 ## 8. cron + Browser(CDP) 실검증
 
@@ -197,6 +205,20 @@ openclaw browser snapshot --url ws://127.0.0.1:18789 --token "$OPENCLAW_GATEWAY_
 ```
 
 `naver.com` 스냅샷이 나오면 CDP 경로는 정상이다.
+
+### 8.3 Naver `우산` 검색 요약 예시
+
+```bash
+openclaw browser start --url ws://127.0.0.1:18789 --token "$OPENCLAW_GATEWAY_TOKEN"
+openclaw browser open "https://search.naver.com/search.naver?query=%EC%9A%B0%EC%82%B0" --url ws://127.0.0.1:18789 --token "$OPENCLAW_GATEWAY_TOKEN"
+openclaw browser snapshot --format ai --limit 250 --url ws://127.0.0.1:18789 --token "$OPENCLAW_GATEWAY_TOKEN"
+```
+
+요약 포인트(실제 실행 기준):
+
+- 상단은 `우산 관련 광고` 블록이 크게 노출됨
+- 본문은 쇼핑/가격비교 카드 중심(브랜드, 형태, 배송 필터)
+- 일반 지식형보다 구매 의도 결과(상품/광고)가 우선됨
 
 ## 9. Troubleshooting
 
