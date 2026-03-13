@@ -1,0 +1,91 @@
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    }
+  },
+  "commands": {
+    "ownerAllowFrom": [
+      "<TELEGRAM_USER_ID>"
+    ],
+    "ownerDisplay": "raw"
+  },
+  "cron": {
+    "enabled": true,
+    "maxConcurrentRuns": 4
+  },
+  "browser": {
+    "enabled": true,
+    "evaluateEnabled": true,
+    "headless": true,
+    "remoteCdpTimeoutMs": 15000,
+    "remoteCdpHandshakeTimeoutMs": 30000,
+    "defaultProfile": "openclaw",
+    "profiles": {
+      "openclaw": {
+        "cdpPort": 18800,
+        "color": "#FF4500"
+      }
+    }
+  },
+  "tools": {
+    "allow": [
+      "group:openclaw",
+      "group:fs",
+      "group:runtime",
+      "group:web"
+    ],
+    "elevated": {
+      "enabled": true,
+      "allowFrom": {
+        "telegram": [
+          "<TELEGRAM_USER_ID>"
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "google/${OPENCLAW_MODEL}"
+      }
+    }
+  },
+  "ui": {
+    "assistant": {
+      "name": "Chaeeun Ops Agent",
+      "avatar": "🦞"
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "open",
+      "allowFrom": [
+        "*"
+      ],
+      "direct": {
+        "<TELEGRAM_USER_ID>": {
+          "tools": {
+            "allow": [
+              "group:openclaw",
+              "group:runtime",
+              "group:web",
+              "group:ui",
+              "group:automation"
+            ]
+          },
+          "systemPrompt": "You are Chaeeun Ops Agent running on OpenClaw core. Always state clearly: you are OpenClaw-based and powered by Gemini API, not a Google first-party assistant. For recurring tasks use cron tools. For browser tasks use browser/CDP tools. Keep answers concise, practical, and execution-oriented."
+        }
+      },
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      }
+    }
+  }
+}

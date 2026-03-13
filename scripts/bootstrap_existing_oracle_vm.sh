@@ -65,7 +65,7 @@ ensure_default_port() {
 ensure_default_model() {
   load_env
   if [[ -n "${GEMINI_API_KEY:-}" && -z "${OPENCLAW_MODEL:-}" ]]; then
-    set_env_value "OPENCLAW_MODEL" "gemini-2.5-flash-lite"
+    set_env_value "OPENCLAW_MODEL" "gemini-2.5-flash"
   elif [[ -n "${GROQ_API_KEY:-}" && -z "${OPENCLAW_MODEL:-}" ]]; then
     set_env_value "OPENCLAW_MODEL" "qwen/qwen3-32b"
   elif [[ -n "${OPENAI_API_KEY:-}" && -z "${OPENCLAW_MODEL:-}" ]]; then
@@ -184,16 +184,28 @@ config.agents.defaults = config.agents.defaults || {};
 config.agents.defaults.model = config.agents.defaults.model || {};
 config.models = config.models || {};
 config.models.providers = config.models.providers || {};
+config.cron = config.cron || {};
+config.browser = config.browser || {};
+
+config.cron.enabled = true;
+if (!config.cron.maxConcurrentRuns) config.cron.maxConcurrentRuns = 4;
+
+config.browser.enabled = true;
+if (typeof config.browser.evaluateEnabled !== 'boolean') config.browser.evaluateEnabled = true;
+if (typeof config.browser.headless !== 'boolean') config.browser.headless = true;
+if (!config.browser.remoteCdpTimeoutMs) config.browser.remoteCdpTimeoutMs = 15000;
+if (!config.browser.remoteCdpHandshakeTimeoutMs) config.browser.remoteCdpHandshakeTimeoutMs = 30000;
+if (!config.browser.defaultProfile) config.browser.defaultProfile = 'openclaw';
+config.browser.profiles = config.browser.profiles || {};
+config.browser.profiles.openclaw = config.browser.profiles.openclaw || {
+  cdpPort: 18800,
+  color: '#FF4500',
+};
 
 if (geminiApiKey) {
-  const modelId = defaultModel || 'gemini-2.5-flash-lite';
-  config.models.providers.geminiOpenAI = {
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    apiKey: geminiApiKey,
-    api: 'openai-completions',
-    models: [{ id: modelId, name: modelId, contextWindow: 1048576, maxTokens: 8192 }],
-  };
-  config.agents.defaults.model.primary = `geminiOpenAI/${modelId}`;
+  const modelId = defaultModel || 'gemini-2.5-flash';
+  config.agents.defaults.model.primary = `google/${modelId}`;
+  if (config.models.providers.geminiOpenAI) delete config.models.providers.geminiOpenAI;
 } else if (groqApiKey) {
   const modelId = defaultModel || 'qwen/qwen3-32b';
   config.models.providers.groqOpenAI = {
@@ -212,7 +224,8 @@ if (hasTelegram) {
   config.channels.telegram = {
     ...(config.channels.telegram || {}),
     enabled: true,
-    dmPolicy: 'pairing',
+    dmPolicy: 'open',
+    allowFrom: ['*'],
     groups: {
       '*': { requireMention: true },
     },
@@ -277,10 +290,11 @@ Environment=OPENCLAW_STATE_DIR=${OPENCLAW_HOME}
 Environment=OPENCLAW_CONFIG_PATH=${OPENCLAW_CONFIG_PATH}
 Environment=OPENCLAW_NO_RESPAWN=1
 Environment=NODE_COMPILE_CACHE=${OPENCLAW_RUNTIME_DIR}
+Environment=NODE_DISABLE_COMPILE_CACHE=1
 Environment=NODE_OPTIONS=--max-old-space-size=384
 ExecStartPre=/usr/bin/mkdir -p ${OPENCLAW_HOME} ${OPENCLAW_HOME}/workspace ${OPENCLAW_RUNTIME_DIR}
 ExecStartPre=/usr/bin/chown -R ${APP_USER}:${APP_USER} ${OPENCLAW_HOME} ${OPENCLAW_RUNTIME_DIR}
-ExecStart=/usr/bin/openclaw gateway --port ${port}
+ExecStart=/usr/bin/bash -lc 'if [ "\${OPENCLAW_INSECURE_TLS:-0}" = "1" ]; then export NODE_TLS_REJECT_UNAUTHORIZED=0; fi; exec /usr/bin/openclaw gateway --port ${port}'
 Restart=always
 RestartSec=5
 TimeoutStartSec=120
