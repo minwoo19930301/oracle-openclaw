@@ -182,6 +182,7 @@ config.gateway.auth.token = {
 config.agents = config.agents || {};
 config.agents.defaults = config.agents.defaults || {};
 config.agents.defaults.model = config.agents.defaults.model || {};
+if (!config.agents.defaults.timeoutSeconds) config.agents.defaults.timeoutSeconds = 120;
 config.models = config.models || {};
 config.models.providers = config.models.providers || {};
 config.cron = config.cron || {};
@@ -224,6 +225,7 @@ if (hasTelegram) {
   config.channels.telegram = {
     ...(config.channels.telegram || {}),
     enabled: true,
+    timeoutSeconds: (config.channels.telegram && config.channels.telegram.timeoutSeconds) || 40,
     dmPolicy: 'open',
     allowFrom: ['*'],
     groups: {

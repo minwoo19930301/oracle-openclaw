@@ -51,7 +51,8 @@
     "defaults": {
       "model": {
         "primary": "google/${OPENCLAW_MODEL}"
-      }
+      },
+      "timeoutSeconds": 120
     }
   },
   "ui": {
@@ -63,6 +64,7 @@
   "channels": {
     "telegram": {
       "enabled": true,
+      "timeoutSeconds": 40,
       "dmPolicy": "open",
       "allowFrom": [
         "*"

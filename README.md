@@ -118,6 +118,7 @@ OPENAI_API_KEY=
 - 모델: `google/${OPENCLAW_MODEL}`
 - cron 활성화
 - browser(CDP) 활성화 + 타임아웃 확장
+- agent/telegram timeout 확장 (`agents.defaults.timeoutSeconds`, `channels.telegram.timeoutSeconds`)
 - Telegram direct 정책에 owner/user 별 tool allow
 - systemPrompt에 정체성 고정
 
