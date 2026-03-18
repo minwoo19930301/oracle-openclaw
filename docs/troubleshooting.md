@@ -76,7 +76,12 @@ Allow dynamic-group <name> to use instance-agent-command-execution-family in ten
 
 - 최소 2GB 이상 swap 확보
 - package upgrade 전체를 생략하고 필요한 패키지만 설치
-- `NODE_OPTIONS=--max-old-space-size=384` 같이 메모리 상한을 둔다
+- `NODE_OPTIONS=--max-old-space-size=640` 정도로 시작하고, OOM 로그를 보며 조정한다
+
+주의:
+
+- `--max-old-space-size=384`는 일부 환경에서 gateway 초기화 중 `heap out of memory`를 유발할 수 있다.
+- 1GB VM에서는 swap(4~8GB) + `640` 조합이 상대적으로 안정적이었다.
 
 ## Telegram bot works but replies do not
 
@@ -200,7 +205,7 @@ openclaw gateway call status --token "$OPENCLAW_GATEWAY_TOKEN" --json
 증상:
 
 - Telegram에서 브라우저 요청 시 "브라우저가 현재 작동하지 않습니다"
-- 로그에 `browser failed: timed out`
+- 로그에 `browser failed: timed out after 20000ms`
 
 대응:
 
@@ -223,7 +228,14 @@ launchctl kickstart -k gui/$(id -u)/ai.minwokim.chaeeun2-openclaw
 }
 ```
 
-3. 동작 검증
+3. 저메모리 VM 전용 하드 패치 적용
+
+```bash
+chmod +x /tmp/harden_browser_on_lowmem_vm.sh
+NODE_MAX_OLD_SPACE_SIZE=640 /tmp/harden_browser_on_lowmem_vm.sh
+```
+
+4. 동작 검증
 
 ```bash
 openclaw browser status --url ws://127.0.0.1:18789 --token "$OPENCLAW_GATEWAY_TOKEN"

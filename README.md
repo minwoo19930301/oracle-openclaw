@@ -22,6 +22,7 @@ Oracle Cloud Always Free VM(또는 기존 VM)에 `OpenClaw`를 올리고, `Gemin
 - [`cloud-init/cloud-init.yaml`](./cloud-init/cloud-init.yaml)
 - [`scripts/bootstrap_existing_oracle_vm.sh`](./scripts/bootstrap_existing_oracle_vm.sh)
 - [`scripts/enable_gemini_key_rotation.sh`](./scripts/enable_gemini_key_rotation.sh)
+- [`scripts/harden_browser_on_lowmem_vm.sh`](./scripts/harden_browser_on_lowmem_vm.sh)
 - [`scripts/setup_run_command_iam.sh`](./scripts/setup_run_command_iam.sh)
 - [`env/openclaw.env.example`](./env/openclaw.env.example)
 - [`config/openclaw.json.example`](./config/openclaw.json.example)
@@ -164,6 +165,15 @@ scp scripts/enable_gemini_key_rotation.sh ubuntu@YOUR_PUBLIC_IP:/tmp/enable_gemi
 ssh ubuntu@YOUR_PUBLIC_IP
 chmod +x /tmp/enable_gemini_key_rotation.sh
 APP_USER=ubuntu ENV_FILE=/etc/openclaw/openclaw.env /tmp/enable_gemini_key_rotation.sh
+```
+
+1GB VM에서 브라우저 timeout(20s) 문제를 완화하려면:
+
+```bash
+scp scripts/harden_browser_on_lowmem_vm.sh ubuntu@YOUR_PUBLIC_IP:/tmp/harden_browser_on_lowmem_vm.sh
+ssh ubuntu@YOUR_PUBLIC_IP
+chmod +x /tmp/harden_browser_on_lowmem_vm.sh
+NODE_MAX_OLD_SPACE_SIZE=640 /tmp/harden_browser_on_lowmem_vm.sh
 ```
 
 ## 6. 기본 동작 확인
