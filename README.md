@@ -21,6 +21,7 @@ Oracle Cloud Always Free VM(또는 기존 VM)에 `OpenClaw`를 올리고, `Gemin
 
 - [`cloud-init/cloud-init.yaml`](./cloud-init/cloud-init.yaml)
 - [`scripts/bootstrap_existing_oracle_vm.sh`](./scripts/bootstrap_existing_oracle_vm.sh)
+- [`scripts/enable_gemini_key_rotation.sh`](./scripts/enable_gemini_key_rotation.sh)
 - [`scripts/setup_run_command_iam.sh`](./scripts/setup_run_command_iam.sh)
 - [`env/openclaw.env.example`](./env/openclaw.env.example)
 - [`config/openclaw.json.example`](./config/openclaw.json.example)
@@ -96,6 +97,7 @@ DM 창 바로 열기:
 ```bash
 TELEGRAM_BOT_TOKEN=1234567890:replace-with-botfather-token
 GEMINI_API_KEY=AIzaSyReplaceMe
+GEMINI_API_KEYS=AIzaSyKey1,AIzaSyKey2,AIzaSyKey3
 OPENCLAW_MODEL=gemini-2.5-flash-lite
 OPENCLAW_GATEWAY_TOKEN=
 OPENCLAW_PORT=18789
@@ -106,6 +108,7 @@ OPENAI_API_KEY=
 
 참고:
 
+- `GEMINI_API_KEYS`를 넣으면 로테이션 프록시에서 키를 순환 사용
 - `OPENCLAW_GATEWAY_TOKEN` 비워두면 설치 스크립트/런처에서 생성 가능
 - 회사/프록시망에서 Node TLS가 `SELF_SIGNED_CERT_IN_CHAIN`으로 깨지면 `OPENCLAW_INSECURE_TLS=1` 임시 사용 가능
 
@@ -152,6 +155,15 @@ sudo install -d -m 750 -o root -g opc /etc/openclaw
 sudo mv /tmp/openclaw.env /etc/openclaw/openclaw.env
 chmod +x /tmp/bootstrap_existing_oracle_vm.sh
 /tmp/bootstrap_existing_oracle_vm.sh
+```
+
+Gemini 무료 티어 429를 줄이려면(키 여러 개 보유 시):
+
+```bash
+scp scripts/enable_gemini_key_rotation.sh ubuntu@YOUR_PUBLIC_IP:/tmp/enable_gemini_key_rotation.sh
+ssh ubuntu@YOUR_PUBLIC_IP
+chmod +x /tmp/enable_gemini_key_rotation.sh
+APP_USER=ubuntu ENV_FILE=/etc/openclaw/openclaw.env /tmp/enable_gemini_key_rotation.sh
 ```
 
 ## 6. 기본 동작 확인
