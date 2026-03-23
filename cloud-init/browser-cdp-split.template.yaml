@@ -1,0 +1,149 @@
+#cloud-config
+
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - jq
+  - tar
+  - gzip
+
+write_files:
+  - path: /etc/openclaw-browser.env
+    owner: root:root
+    permissions: "0640"
+    content: |
+      CDP_SECRET=REPLACE_WITH_RANDOM_SECRET
+      CDP_BIND=0.0.0.0
+      CDP_PORT=3000
+
+  - path: /opt/openclaw-browser/cdp-proxy.mjs
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env node
+      import http from 'node:http';
+      import { URL } from 'node:url';
+      import process from 'node:process';
+      import WebSocket, { WebSocketServer } from 'ws';
+
+      const BIND = process.env.CDP_BIND || '0.0.0.0';
+      const PORT = Number(process.env.CDP_PORT || 3000);
+      const SECRET = String(process.env.CDP_SECRET || '');
+      const LOCAL_DEVTOOLS = process.env.LOCAL_DEVTOOLS || 'http://127.0.0.1:9222/json/version';
+
+      const server = http.createServer((req, res) => {
+        if ((req.url || '').startsWith('/health')) {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'not_found' }));
+      });
+
+      const wss = new WebSocketServer({ noServer: true });
+
+      async function upstreamUrl() {
+        const res = await fetch(LOCAL_DEVTOOLS, { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) throw new Error(`devtools endpoint failed: ${res.status}`);
+        const json = await res.json();
+        if (!json.webSocketDebuggerUrl) throw new Error('webSocketDebuggerUrl missing');
+        return json.webSocketDebuggerUrl;
+      }
+
+      server.on('upgrade', async (req, socket, head) => {
+        try {
+          const url = new URL(req.url || '/', 'http://127.0.0.1');
+          if (url.pathname !== '/cdp') {
+            socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+          if (SECRET && url.searchParams.get('secret') !== SECRET) {
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+          const upstream = new WebSocket(await upstreamUrl(), { handshakeTimeout: 10000 });
+          wss.handleUpgrade(req, socket, head, (client) => {
+            const closeBoth = () => {
+              try { client.close(); } catch {}
+              try { upstream.close(); } catch {}
+            };
+            upstream.on('open', () => {
+              client.on('message', (d, b) => {
+                if (upstream.readyState === WebSocket.OPEN) upstream.send(d, { binary: b });
+              });
+              upstream.on('message', (d, b) => {
+                if (client.readyState === WebSocket.OPEN) client.send(d, { binary: b });
+              });
+            });
+            client.on('close', closeBoth);
+            upstream.on('close', closeBoth);
+            client.on('error', closeBoth);
+            upstream.on('error', closeBoth);
+          });
+        } catch {
+          socket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+          socket.destroy();
+        }
+      });
+
+      server.listen(PORT, BIND, () => {
+        console.log(`[cdp-proxy] listening on ${BIND}:${PORT}`);
+      });
+
+  - path: /etc/systemd/system/chrome-headless.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Headless Chrome for OpenClaw CDP
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=opc
+      Group=opc
+      Environment=HOME=/home/opc
+      ExecStart=/usr/bin/google-chrome-stable --headless=new --disable-gpu --no-sandbox --disable-dev-shm-usage --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 --user-data-dir=/home/opc/.cache/openclaw-chrome about:blank
+      Restart=always
+      RestartSec=2
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/cdp-proxy.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=OpenClaw Remote CDP Proxy
+      After=network-online.target chrome-headless.service
+      Wants=network-online.target chrome-headless.service
+
+      [Service]
+      Type=simple
+      User=opc
+      Group=opc
+      WorkingDirectory=/opt/openclaw-browser
+      EnvironmentFile=/etc/openclaw-browser.env
+      Environment=HOME=/home/opc
+      ExecStart=/usr/bin/node /opt/openclaw-browser/cdp-proxy.mjs
+      Restart=always
+      RestartSec=2
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - [ bash, -lc, "systemctl disable --now firewalld || true" ]
+  - [ bash, -lc, "curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -" ]
+  - [ bash, -lc, "dnf install -y nodejs wget xdg-utils liberation-fonts alsa-lib atk at-spi2-atk cups-libs gtk3 libXcomposite libXcursor libXdamage libXext libXi libXrandr libXScrnSaver libXtst pango" ]
+  - [ bash, -lc, "dnf install -y https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm" ]
+  - [ bash, -lc, "mkdir -p /opt/openclaw-browser && chown -R opc:opc /opt/openclaw-browser /home/opc/.cache" ]
+  - [ bash, -lc, "sudo -u opc bash -lc 'cd /opt/openclaw-browser && npm init -y >/dev/null 2>&1 || true && npm i ws --no-audit --no-fund'" ]
+  - [ bash, -lc, "systemctl daemon-reload" ]
+  - [ bash, -lc, "systemctl enable --now chrome-headless.service cdp-proxy.service" ]

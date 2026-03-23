@@ -20,12 +20,15 @@ Oracle Cloud Always Free VM(또는 기존 VM)에 `OpenClaw`를 올리고, `Gemin
 ## What This Repo Contains
 
 - [`cloud-init/cloud-init.yaml`](./cloud-init/cloud-init.yaml)
+- [`cloud-init/openclaw-core-split.template.yaml`](./cloud-init/openclaw-core-split.template.yaml)
+- [`cloud-init/browser-cdp-split.template.yaml`](./cloud-init/browser-cdp-split.template.yaml)
 - [`scripts/bootstrap_existing_oracle_vm.sh`](./scripts/bootstrap_existing_oracle_vm.sh)
 - [`scripts/enable_gemini_key_rotation.sh`](./scripts/enable_gemini_key_rotation.sh)
 - [`scripts/harden_browser_on_lowmem_vm.sh`](./scripts/harden_browser_on_lowmem_vm.sh)
 - [`scripts/setup_run_command_iam.sh`](./scripts/setup_run_command_iam.sh)
 - [`env/openclaw.env.example`](./env/openclaw.env.example)
 - [`config/openclaw.json.example`](./config/openclaw.json.example)
+- [`docs/dual-vm-split.md`](./docs/dual-vm-split.md)
 
 ## Architecture
 

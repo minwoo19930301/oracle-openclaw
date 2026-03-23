@@ -1,0 +1,171 @@
+#cloud-config
+
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - jq
+  - tar
+  - gzip
+  - openssl
+
+write_files:
+  - path: /etc/openclaw/openclaw.env
+    owner: root:root
+    permissions: "0640"
+    content: |
+      TELEGRAM_BOT_TOKEN=REPLACE_TELEGRAM_BOT_TOKEN
+      GEMINI_API_KEY=REPLACE_PRIMARY_GEMINI_KEY
+      GEMINI_API_KEYS=REPLACE_COMMA_SEPARATED_KEYS
+      OPENCLAW_MODEL=gemini-2.5-flash-lite
+      OPENCLAW_GATEWAY_TOKEN=REPLACE_RANDOM_GATEWAY_TOKEN
+      OPENCLAW_PORT=18789
+      OPENCLAW_INSECURE_TLS=0
+      BROWSER_CDP_URL=ws://browser-cdp-vm.<subnet-domain>:3000/cdp?secret=REPLACE_CDP_SECRET
+
+  - path: /usr/local/bin/openclaw-core-bootstrap.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      APP_USER=opc
+      APP_HOME=/home/opc
+      ENV_FILE=/etc/openclaw/openclaw.env
+      OPENCLAW_HOME=${APP_HOME}/.openclaw
+      OPENCLAW_CONFIG=${OPENCLAW_HOME}/openclaw.json
+
+      systemctl disable --now firewalld || true
+
+      if [ ! -f /swapfile-openclaw ]; then
+        fallocate -l 6G /swapfile-openclaw
+        chmod 0600 /swapfile-openclaw
+        mkswap /swapfile-openclaw
+        swapon /swapfile-openclaw
+        echo '/swapfile-openclaw none swap sw 0 0' >> /etc/fstab
+      fi
+
+      curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
+      dnf install -y nodejs
+
+      mkdir -p /var/tmp/npm-cache /var/tmp/openclaw-compile-cache
+      chown -R ${APP_USER}:${APP_USER} /var/tmp/npm-cache /var/tmp/openclaw-compile-cache
+      npm_config_cache=/var/tmp/npm-cache SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install -g --unsafe-perm openclaw@latest
+
+      install -d -o ${APP_USER} -g ${APP_USER} -m 0700 ${OPENCLAW_HOME} ${OPENCLAW_HOME}/workspace
+      install -d -o ${APP_USER} -g ${APP_USER} -m 0755 /var/tmp/openclaw-compile-cache
+
+      sudo -u ${APP_USER} env \
+        HOME=${APP_HOME} \
+        OPENCLAW_HOME=${OPENCLAW_HOME} \
+        OPENCLAW_STATE_DIR=${OPENCLAW_HOME} \
+        OPENCLAW_CONFIG_PATH=${OPENCLAW_CONFIG} \
+        bash -lc 'set -a; source /etc/openclaw/openclaw.env; set +a; openclaw onboard --non-interactive --mode local --auth-choice skip --gateway-auth token --gateway-token-ref-env OPENCLAW_GATEWAY_TOKEN --skip-health --accept-risk || true'
+
+      cat >/tmp/openclaw-patch-config.cjs <<'NODE'
+      const fs = require('fs');
+      const configPath = process.env.OPENCLAW_CONFIG_PATH;
+      const modelId = (process.env.OPENCLAW_MODEL || 'gemini-2.5-flash-lite').trim();
+      const cdpUrl = (process.env.BROWSER_CDP_URL || '').trim();
+      const telegramBotToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+
+      let config = {};
+      try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch {}
+
+      config.gateway = {
+        mode: 'local',
+        bind: 'loopback',
+        auth: {
+          mode: 'token',
+          token: { source: 'env', provider: 'default', id: 'OPENCLAW_GATEWAY_TOKEN' }
+        }
+      };
+
+      config.cron = { ...(config.cron || {}), enabled: true, maxConcurrentRuns: 3 };
+
+      config.browser = config.browser || {};
+      config.browser.enabled = true;
+      config.browser.evaluateEnabled = true;
+      config.browser.headless = true;
+      config.browser.remoteCdpTimeoutMs = 30000;
+      config.browser.remoteCdpHandshakeTimeoutMs = 45000;
+      config.browser.defaultProfile = 'remote';
+      config.browser.profiles = config.browser.profiles || {};
+      config.browser.profiles.remote = { cdpUrl, color: '22aa66' };
+
+      config.agents = config.agents || {};
+      config.agents.defaults = config.agents.defaults || {};
+      config.agents.defaults.timeoutSeconds = 140;
+      config.agents.defaults.model = {
+        primary: `google/${modelId}`,
+        fallbacks: [
+          'google/gemini-flash-lite-latest',
+          'google/gemini-3.1-flash-lite-preview',
+          'google/gemini-2.5-flash'
+        ]
+      };
+
+      config.tools = config.tools || {};
+      config.tools.allow = ['group:openclaw', 'group:runtime', 'group:web', 'group:automation', 'group:fs'];
+      config.tools.elevated = { enabled: true, allowFrom: { telegram: ['*'] } };
+
+      config.channels = config.channels || {};
+      config.channels.telegram = {
+        enabled: true,
+        botToken: telegramBotToken,
+        timeoutSeconds: 60,
+        dmPolicy: 'open',
+        allowFrom: ['*'],
+        groups: { '*': { requireMention: true } }
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+      NODE
+
+      sudo -u ${APP_USER} env \
+        HOME=${APP_HOME} \
+        OPENCLAW_HOME=${OPENCLAW_HOME} \
+        OPENCLAW_STATE_DIR=${OPENCLAW_HOME} \
+        OPENCLAW_CONFIG_PATH=${OPENCLAW_CONFIG} \
+        bash -lc 'set -a; source /etc/openclaw/openclaw.env; set +a; node /tmp/openclaw-patch-config.cjs'
+
+      rm -f /tmp/openclaw-patch-config.cjs
+
+      cat >/etc/systemd/system/openclaw.service <<'SERVICE'
+      [Unit]
+      Description=OpenClaw Gateway
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      User=opc
+      Group=opc
+      WorkingDirectory=/home/opc
+      EnvironmentFile=/etc/openclaw/openclaw.env
+      Environment=HOME=/home/opc
+      Environment=OPENCLAW_HOME=/home/opc/.openclaw
+      Environment=OPENCLAW_STATE_DIR=/home/opc/.openclaw
+      Environment=OPENCLAW_CONFIG_PATH=/home/opc/.openclaw/openclaw.json
+      Environment=OPENCLAW_NO_RESPAWN=1
+      Environment=NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache
+      Environment=NODE_DISABLE_COMPILE_CACHE=1
+      Environment=NODE_OPTIONS=--max-old-space-size=640
+      ExecStartPre=/usr/bin/mkdir -p /home/opc/.openclaw /home/opc/.openclaw/workspace /var/tmp/openclaw-compile-cache
+      ExecStartPre=/usr/bin/chown -R opc:opc /home/opc/.openclaw /var/tmp/openclaw-compile-cache
+      ExecStart=/usr/bin/bash -lc 'if [ "${OPENCLAW_INSECURE_TLS:-0}" = "1" ]; then export NODE_TLS_REJECT_UNAUTHORIZED=0; fi; exec /usr/bin/openclaw gateway --port ${OPENCLAW_PORT}'
+      Restart=always
+      RestartSec=5
+      TimeoutStartSec=150
+
+      [Install]
+      WantedBy=multi-user.target
+      SERVICE
+
+      systemctl daemon-reload
+      systemctl enable --now openclaw.service
+
+runcmd:
+  - [ bash, -lc, "chmod +x /usr/local/bin/openclaw-core-bootstrap.sh" ]
+  - [ bash, -lc, "/usr/local/bin/openclaw-core-bootstrap.sh" ]
