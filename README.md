@@ -14,7 +14,6 @@ Oracle Cloud Always Free VM(또는 기존 VM)에 `OpenClaw`를 올리고, `Gemin
 - Repo: <https://github.com/minwoo19930301/oracle-openclaw>
 - Telegram bot profile: `https://t.me/<your_bot_username>`
 - Telegram Web direct chat: `https://web.telegram.org/k/#@<your_bot_username>`
-- Example: <https://web.telegram.org/k/#@chaeeun2_bot>
 - OpenClaw dashboard (local tunnel): <http://127.0.0.1:18789/>
 
 ## What This Repo Contains
