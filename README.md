@@ -1,5 +1,9 @@
 # Oracle OpenClaw
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Oracle Cloud](https://img.shields.io/badge/Oracle_Cloud-F80000?style=flat&logo=oracle&logoColor=white)](https://www.oracle.com/cloud/)
+[![GitHub stars](https://img.shields.io/github/stars/minwoo19930301/oracle-openclaw?style=social)](https://github.com/minwoo19930301/oracle-openclaw/stargazers)
+
 Oracle Cloud Always Free VM(또는 기존 VM)에 `OpenClaw`를 올리고, `Gemini API`를 뇌로 쓰고, `Telegram Bot`으로 붙이는 실사용 가이드다.
 
 핵심 목표:
