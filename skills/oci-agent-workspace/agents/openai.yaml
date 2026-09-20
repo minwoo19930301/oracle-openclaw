@@ -1,0 +1,4 @@
+interface:
+  display_name: "OCI 에이전트 환경 구축"
+  short_description: "OCI에 OpenClaw와 협업 웹앱을 분리해 설치·검증하는 구축 절차"
+  default_prompt: "$oci-agent-workspace로 기존 OCI VM을 점검하고 OpenClaw와 협업 환경의 구축·검증 절차를 진행해줘."

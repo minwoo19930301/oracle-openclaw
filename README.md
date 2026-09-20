@@ -16,6 +16,7 @@ Oracle Cloud Always Free VM(또는 기존 VM)에 `OpenClaw`를 올리고, `Gemin
 ## Quick Links
 
 - Repo: <https://github.com/minwoo19930301/oracle-openclaw>
+- 에이전트용 [OCI 환경 구축 스킬](./skills/oci-agent-workspace/SKILL.md): 기존 VM 조사, OpenClaw 설치·복구, 별도 협업 웹앱·공유 데스크톱 구성과 검증. `skills/oci-agent-workspace` 폴더를 사용하는 에이전트의 skills 디렉터리에 복사한 뒤 `$oci-agent-workspace`로 호출할 수 있다. 버전별 설치·접근 설정은 스킬이 안내하는 현재 공식 문서를 우선 확인한다.
 - Telegram bot profile: `https://t.me/<your_bot_username>`
 - Telegram Web direct chat: `https://web.telegram.org/k/#@<your_bot_username>`
 - OpenClaw dashboard (local tunnel): <http://127.0.0.1:18789/>
