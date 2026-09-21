@@ -1,5 +1,11 @@
 # Oracle OpenClaw
 
+<!-- PROJECT-PRESENTATION:START -->
+<a href="https://github.com/minwoo19930301/oracle-openclaw"><img src=".github/project-cover.svg" alt="Oracle OpenClaw" width="960"></a>
+
+[![QUICK START](https://img.shields.io/badge/QUICK%20START-374151?style=for-the-badge)](#5-설치-경로-선택) [![SOURCE](https://img.shields.io/badge/SOURCE-444444?style=for-the-badge)](https://github.com/minwoo19930301/oracle-openclaw)
+<!-- PROJECT-PRESENTATION:END -->
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Oracle Cloud](https://img.shields.io/badge/Oracle_Cloud-F80000?style=flat&logo=oracle&logoColor=white)](https://www.oracle.com/cloud/)
 [![GitHub stars](https://img.shields.io/github/stars/minwoo19930301/oracle-openclaw?style=social)](https://github.com/minwoo19930301/oracle-openclaw/stargazers)
